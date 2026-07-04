@@ -4,7 +4,7 @@ import { Server, Socket } from 'socket.io';
 import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
 import { rooms, generateRoomCode, serializeRoom } from './rooms';
-import { Room, Member, MogCheck, RoomSettings } from './types';
+import { Room, Member, MogCheck, RoomSettings, AuraEvent } from './types';
 
 const app = express();
 app.use(cors());
@@ -13,12 +13,12 @@ app.use(express.json());
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: { origin: 'http://localhost:3000', methods: ['GET', 'POST'] },
-  maxHttpBufferSize: 5e6, // 5MB for photos
+  maxHttpBufferSize: 5e6,
 });
 
 const PORT = 3001;
 
-// ── helpers ──────────────────────────────────────────────────────────────────
+// ── helpers ───────────────────────────────────────────────────────────────────
 
 function broadcast(roomCode: string) {
   const room = rooms.get(roomCode);
@@ -35,9 +35,18 @@ function findMemberBySocket(socketId: string): { room: Room; member: Member } | 
   return null;
 }
 
+function addAura(member: Member, delta: number, reason: AuraEvent['reason']) {
+  member.aura += delta;
+  member.sessionAura += delta;
+  member.auraLog.push({ delta, reason, timestamp: Date.now() });
+}
+
+function canControlTimer(room: Room, member: Member): boolean {
+  return member.isHost || room.settings.timerControlPermission === 'all';
+}
+
 function promoteNewHost(room: Room) {
-  const candidates = Array.from(room.members.values())
-    .sort((a, b) => a.joinedAt - b.joinedAt);
+  const candidates = Array.from(room.members.values()).sort((a, b) => a.joinedAt - b.joinedAt);
   if (candidates.length === 0) return;
   const newHost = candidates[0];
   const oldHost = room.members.get(room.hostId);
@@ -79,8 +88,7 @@ function failCheck(room: Room, check: MogCheck, reason: string) {
     target.status = 'mog-failed';
     target.failedChecks++;
     target.sessionFailedChecks++;
-    target.aura -= 30;
-    target.sessionAura -= 30;
+    addAura(target, -30, 'mog-check-failed');
   }
 
   room.activeChecks.delete(check.id);
@@ -99,17 +107,12 @@ function endFocusSession(room: Room) {
   room.mode = 'finished';
   room.timer = { endsAt: null, remainingMs: 0 };
 
-  // fail any still-pending checks
   for (const check of Array.from(room.activeChecks.values())) {
-    if (check.status === 'pending') {
-      failCheck(room, check, 'session-ended');
-    }
+    if (check.status === 'pending') failCheck(room, check, 'session-ended');
   }
 
-  // award session completion bonus
   for (const member of room.members.values()) {
-    member.aura += 50;
-    member.sessionAura += 50;
+    addAura(member, 50, 'session-complete');
   }
 
   const recap = buildRecap(room);
@@ -135,10 +138,35 @@ function buildRecap(room: Room) {
       sessionFailedChecks: m.sessionFailedChecks,
       sessionSentSuccessfully: m.sessionSentSuccessfully,
       totalAura: m.aura,
+      auraLog: m.auraLog,
     })),
     mvp: mvp ? { id: mvp.id, username: mvp.username, sessionAura: mvp.sessionAura } : null,
     focusDurationMs: room.settings.focusDuration,
+    photos: room.photos,
   };
+}
+
+function removeMember(room: Room, member: Member) {
+  // fail any pending check targeting this member
+  for (const check of Array.from(room.activeChecks.values())) {
+    if (check.toMemberId === member.id && check.status === 'pending') {
+      failCheck(room, check, 'disconnect');
+    }
+  }
+  const wasHost = member.isHost;
+  room.members.delete(member.id);
+
+  if (room.members.size === 0) {
+    room.emptyRoomTimeout = setTimeout(() => {
+      clearServerTimer(room);
+      rooms.delete(room.code);
+      console.log(`Room ${room.code} deleted after grace period`);
+    }, 60_000);
+    return;
+  }
+
+  if (wasHost) promoteNewHost(room);
+  broadcast(room.code);
 }
 
 // ── socket handlers ───────────────────────────────────────────────────────────
@@ -152,6 +180,7 @@ io.on('connection', (socket: Socket) => {
     breakDuration?: number;
     checksPerSession?: number;
     cooldownMs?: number;
+    timerControlPermission?: 'host-only' | 'all';
   }) => {
     const code = generateRoomCode();
     const memberId = uuidv4();
@@ -161,6 +190,7 @@ io.on('connection', (socket: Socket) => {
       breakDuration: data.breakDuration ?? 5 * 60 * 1000,
       checksPerSession: data.checksPerSession ?? 2,
       cooldownMs: data.cooldownMs ?? 2 * 60 * 1000,
+      timerControlPermission: data.timerControlPermission ?? 'host-only',
     };
 
     const member: Member = {
@@ -181,6 +211,7 @@ io.on('connection', (socket: Socket) => {
       sessionPassedChecks: 0,
       sessionFailedChecks: 0,
       sessionSentSuccessfully: 0,
+      auraLog: [],
     };
 
     const room: Room = {
@@ -191,6 +222,7 @@ io.on('connection', (socket: Socket) => {
       timer: { endsAt: null, remainingMs: settings.focusDuration },
       members: new Map([[memberId, member]]),
       activeChecks: new Map(),
+      photos: [],
       emptyRoomTimeout: null,
       serverTimerTimeout: null,
       sessionNumber: 0,
@@ -216,7 +248,7 @@ io.on('connection', (socket: Socket) => {
       username: data.username,
       isHost: false,
       aura: 0,
-      status: room.mode === 'focus' ? 'locked-in' : room.mode === 'break' ? 'on-break' : 'locked-in',
+      status: room.mode === 'break' ? 'on-break' : 'locked-in',
       checksRemaining: room.settings.checksPerSession,
       lastCheckSentAt: null,
       passedChecks: 0,
@@ -228,6 +260,7 @@ io.on('connection', (socket: Socket) => {
       sessionPassedChecks: 0,
       sessionFailedChecks: 0,
       sessionSentSuccessfully: 0,
+      auraLog: [],
     };
 
     if (room.emptyRoomTimeout) {
@@ -241,11 +274,77 @@ io.on('connection', (socket: Socket) => {
     broadcast(room.code);
   });
 
-  socket.on('start-focus', () => {
+  socket.on('leave-room', () => {
+    const res = findMemberBySocket(socket.id);
+    if (!res) return;
+    const { room, member } = res;
+    socket.leave(room.code);
+    removeMember(room, member);
+  });
+
+  socket.on('end-room', () => {
     const res = findMemberBySocket(socket.id);
     if (!res) return;
     const { room, member } = res;
     if (!member.isHost) return;
+
+    clearServerTimer(room);
+    for (const check of Array.from(room.activeChecks.values())) {
+      if (check.timeout) clearTimeout(check.timeout);
+    }
+
+    io.to(room.code).emit('room-ended', { reason: 'host-ended' });
+    rooms.delete(room.code);
+    console.log(`Room ${room.code} ended by host`);
+  });
+
+  socket.on('back-to-lobby', () => {
+    const res = findMemberBySocket(socket.id);
+    if (!res) return;
+    const { room, member } = res;
+    if (!member.isHost) return;
+
+    clearServerTimer(room);
+    room.mode = 'waiting';
+    room.timer = { endsAt: null, remainingMs: room.settings.focusDuration };
+    for (const m of room.members.values()) {
+      m.status = 'locked-in';
+      m.sessionAura = 0;
+      m.sessionPassedChecks = 0;
+      m.sessionFailedChecks = 0;
+      m.sessionSentSuccessfully = 0;
+    }
+    broadcast(room.code);
+  });
+
+  socket.on('update-settings', (data: Partial<RoomSettings>) => {
+    const res = findMemberBySocket(socket.id);
+    if (!res) return;
+    const { room, member } = res;
+    if (!member.isHost) return;
+
+    const prev = room.settings;
+    room.settings = {
+      focusDuration: data.focusDuration ?? prev.focusDuration,
+      breakDuration: data.breakDuration ?? prev.breakDuration,
+      checksPerSession: data.checksPerSession ?? prev.checksPerSession,
+      cooldownMs: data.cooldownMs ?? prev.cooldownMs,
+      timerControlPermission: data.timerControlPermission ?? prev.timerControlPermission,
+    };
+
+    // If not running a focus session, update the timer display too
+    if (room.mode === 'waiting' || room.mode === 'finished') {
+      room.timer.remainingMs = room.settings.focusDuration;
+    }
+
+    broadcast(room.code);
+  });
+
+  socket.on('start-focus', () => {
+    const res = findMemberBySocket(socket.id);
+    if (!res) return;
+    const { room, member } = res;
+    if (!canControlTimer(room, member)) return;
     if (room.mode === 'focus') return;
 
     room.mode = 'focus';
@@ -265,19 +364,16 @@ io.on('connection', (socket: Socket) => {
     const res = findMemberBySocket(socket.id);
     if (!res) return;
     const { room, member } = res;
-    if (!member.isHost) return;
+    if (!canControlTimer(room, member)) return;
 
     room.mode = 'break';
     room.timer = { endsAt: Date.now() + room.settings.breakDuration, remainingMs: room.settings.breakDuration };
-
-    for (const m of room.members.values()) {
-      m.status = 'on-break';
-    }
+    for (const m of room.members.values()) m.status = 'on-break';
 
     startServerTimer(room, room.settings.breakDuration, () => {
       room.mode = 'waiting';
       room.timer = { endsAt: null, remainingMs: room.settings.focusDuration };
-      for (const m of room.members.values()) { m.status = 'locked-in'; }
+      for (const m of room.members.values()) m.status = 'locked-in';
       broadcast(room.code);
     });
 
@@ -288,7 +384,7 @@ io.on('connection', (socket: Socket) => {
     const res = findMemberBySocket(socket.id);
     if (!res) return;
     const { room, member } = res;
-    if (!member.isHost) return;
+    if (!canControlTimer(room, member)) return;
     if (!room.timer.endsAt) return;
 
     clearServerTimer(room);
@@ -301,7 +397,7 @@ io.on('connection', (socket: Socket) => {
     const res = findMemberBySocket(socket.id);
     if (!res) return;
     const { room, member } = res;
-    if (!member.isHost) return;
+    if (!canControlTimer(room, member)) return;
     if (room.timer.endsAt) return;
     if (room.timer.remainingMs <= 0) return;
 
@@ -324,7 +420,7 @@ io.on('connection', (socket: Socket) => {
     const res = findMemberBySocket(socket.id);
     if (!res) return;
     const { room, member } = res;
-    if (!member.isHost) return;
+    if (!canControlTimer(room, member)) return;
 
     clearServerTimer(room);
     room.mode = 'waiting';
@@ -337,38 +433,21 @@ io.on('connection', (socket: Socket) => {
     if (!res) return;
     const { room, member: sender } = res;
 
-    if (room.mode !== 'focus') {
-      socket.emit('mog-check-rejected', { reason: 'not-in-focus' });
-      return;
-    }
-    if (data.toMemberId === sender.id) {
-      socket.emit('mog-check-rejected', { reason: 'cant-mog-yourself' });
-      return;
-    }
-    if (sender.checksRemaining <= 0) {
-      socket.emit('mog-check-rejected', { reason: 'no-checks-remaining' });
-      return;
-    }
+    if (room.mode !== 'focus') { socket.emit('mog-check-rejected', { reason: 'not-in-focus' }); return; }
+    if (data.toMemberId === sender.id) { socket.emit('mog-check-rejected', { reason: 'cant-mog-yourself' }); return; }
+    if (sender.checksRemaining <= 0) { socket.emit('mog-check-rejected', { reason: 'no-checks-remaining' }); return; }
     if (sender.lastCheckSentAt && Date.now() - sender.lastCheckSentAt < room.settings.cooldownMs) {
       socket.emit('mog-check-rejected', { reason: 'cooldown-active', remainingMs: room.settings.cooldownMs - (Date.now() - sender.lastCheckSentAt) });
       return;
     }
 
     const target = room.members.get(data.toMemberId);
-    if (!target) {
-      socket.emit('mog-check-rejected', { reason: 'target-not-found' });
-      return;
-    }
+    if (!target) { socket.emit('mog-check-rejected', { reason: 'target-not-found' }); return; }
 
-    // atomic check: target already pending?
     const alreadyPending = Array.from(room.activeChecks.values())
       .some(c => c.toMemberId === data.toMemberId && c.status === 'pending');
-    if (alreadyPending) {
-      socket.emit('mog-check-rejected', { reason: 'already-pending' });
-      return;
-    }
+    if (alreadyPending) { socket.emit('mog-check-rejected', { reason: 'already-pending' }); return; }
 
-    // all good — create the check
     sender.checksRemaining--;
     sender.lastCheckSentAt = Date.now();
     target.status = 'mog-pending';
@@ -382,15 +461,12 @@ io.on('connection', (socket: Socket) => {
       createdAt: Date.now(),
       expiresAt: Date.now() + 60_000,
       photoBase64: null,
-      timeout: setTimeout(() => {
-        failCheck(room, check, 'timeout');
-      }, 60_000),
+      timeout: setTimeout(() => failCheck(room, check, 'timeout'), 60_000),
     };
 
     room.activeChecks.set(checkId, check);
 
-    const targetSocket = [...io.sockets.sockets.values()]
-      .find(s => s.id === target.socketId);
+    const targetSocket = [...io.sockets.sockets.values()].find(s => s.id === target.socketId);
     if (targetSocket) {
       targetSocket.emit('receive-mog-check', {
         checkId,
@@ -418,17 +494,23 @@ io.on('connection', (socket: Socket) => {
     member.status = 'mog-certified';
     member.passedChecks++;
     member.sessionPassedChecks++;
-    member.aura += 25;
-    member.sessionAura += 25;
     member.latestPhotoBase64 = data.photoBase64;
+    addAura(member, 25, 'mog-check-passed');
 
     const sender = room.members.get(check.fromMemberId);
     if (sender) {
       sender.sentSuccessfully++;
       sender.sessionSentSuccessfully++;
-      sender.aura += 10;
-      sender.sessionAura += 10;
+      addAura(sender, 10, 'mog-check-sent-success');
     }
+
+    room.photos.push({
+      memberId: member.id,
+      username: member.username,
+      fromUsername: sender?.username ?? '???',
+      photoBase64: data.photoBase64,
+      timestamp: Date.now(),
+    });
 
     room.activeChecks.delete(check.id);
 
@@ -457,32 +539,7 @@ io.on('connection', (socket: Socket) => {
     console.log('- socket disconnected:', socket.id);
     const res = findMemberBySocket(socket.id);
     if (!res) return;
-    const { room, member } = res;
-
-    // fail any pending check targeting this member
-    for (const check of Array.from(room.activeChecks.values())) {
-      if (check.toMemberId === member.id && check.status === 'pending') {
-        failCheck(room, check, 'disconnect');
-      }
-    }
-
-    const wasHost = member.isHost;
-    room.members.delete(member.id);
-
-    if (room.members.size === 0) {
-      room.emptyRoomTimeout = setTimeout(() => {
-        clearServerTimer(room);
-        rooms.delete(room.code);
-        console.log(`Room ${room.code} deleted after grace period`);
-      }, 60_000);
-      return;
-    }
-
-    if (wasHost) {
-      promoteNewHost(room);
-    }
-
-    broadcast(room.code);
+    removeMember(res.room, res.member);
   });
 });
 

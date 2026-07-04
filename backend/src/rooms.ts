@@ -35,6 +35,7 @@ export function serializeRoom(room: Room) {
       sessionPassedChecks: m.sessionPassedChecks,
       sessionFailedChecks: m.sessionFailedChecks,
       sessionSentSuccessfully: m.sessionSentSuccessfully,
+      auraLog: m.auraLog,
     })),
     activeChecks: Array.from(room.activeChecks.values()).map(c => ({
       id: c.id,
@@ -44,6 +45,7 @@ export function serializeRoom(room: Room) {
       createdAt: c.createdAt,
       expiresAt: c.expiresAt,
     })),
+    photos: room.photos,
     sessionNumber: room.sessionNumber,
   };
 }

@@ -1,12 +1,20 @@
 export type RoomMode = 'waiting' | 'focus' | 'break' | 'finished';
 export type MemberStatus = 'locked-in' | 'mog-pending' | 'mog-certified' | 'mog-failed' | 'on-break';
 export type CheckStatus = 'pending' | 'passed' | 'failed';
+export type TimerControlPermission = 'host-only' | 'all';
+
+export interface AuraEvent {
+  delta: number;
+  reason: 'session-complete' | 'mog-check-passed' | 'mog-check-failed' | 'mog-check-sent-success';
+  timestamp: number;
+}
 
 export interface RoomSettings {
   focusDuration: number;   // ms
   breakDuration: number;   // ms
   checksPerSession: number;
   cooldownMs: number;
+  timerControlPermission: TimerControlPermission;
 }
 
 export interface Timer {
@@ -32,6 +40,7 @@ export interface Member {
   sessionPassedChecks: number;
   sessionFailedChecks: number;
   sessionSentSuccessfully: number;
+  auraLog: AuraEvent[];
 }
 
 export interface MogCheck {
@@ -45,6 +54,14 @@ export interface MogCheck {
   timeout: ReturnType<typeof setTimeout> | null;
 }
 
+export interface RoomPhoto {
+  memberId: string;
+  username: string;
+  fromUsername: string;
+  photoBase64: string;
+  timestamp: number;
+}
+
 export interface Room {
   code: string;
   hostId: string;
@@ -53,6 +70,7 @@ export interface Room {
   timer: Timer;
   members: Map<string, Member>;
   activeChecks: Map<string, MogCheck>;
+  photos: RoomPhoto[];
   emptyRoomTimeout: ReturnType<typeof setTimeout> | null;
   serverTimerTimeout: ReturnType<typeof setTimeout> | null;
   sessionNumber: number;

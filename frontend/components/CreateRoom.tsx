@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSocket } from '@/lib/socket';
+import { TimerControlPermission } from '@/lib/types';
 
 interface Props { onBack: () => void; }
 
@@ -13,6 +14,7 @@ export default function CreateRoom({ onBack }: Props) {
   const [breakMin, setBreakMin] = useState(5);
   const [checksPerSession, setChecksPerSession] = useState(2);
   const [cooldownMin, setCooldownMin] = useState(2);
+  const [timerControl, setTimerControl] = useState<TimerControlPermission>('host-only');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -36,6 +38,7 @@ export default function CreateRoom({ onBack }: Props) {
       breakDuration: breakMin * 60 * 1000,
       checksPerSession,
       cooldownMs: cooldownMin * 60 * 1000,
+      timerControlPermission: timerControl,
     });
   }
 
@@ -79,6 +82,26 @@ export default function CreateRoom({ onBack }: Props) {
           <div>
             <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider mb-1.5 block">Cooldown (min)</label>
             <input type="number" min={0} max={30} value={cooldownMin} onChange={e => setCooldownMin(Number(e.target.value))} />
+          </div>
+        </div>
+
+        <div>
+          <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider mb-1.5 block">⏱️ Timer Controls</label>
+          <div className="grid grid-cols-2 gap-2">
+            {(['host-only', 'all'] as const).map(opt => (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => setTimerControl(opt)}
+                className={`rounded-xl px-3 py-2 text-sm font-medium border transition-all ${
+                  timerControl === opt
+                    ? 'bg-purple-500/20 border-purple-500/50 text-purple-300'
+                    : 'bg-white/3 border-white/8 text-gray-400 hover:bg-white/8'
+                }`}
+              >
+                {opt === 'host-only' ? '👑 Host only' : '👥 Everyone'}
+              </button>
+            ))}
           </div>
         </div>
       </div>

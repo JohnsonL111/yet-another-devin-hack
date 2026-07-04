@@ -5,8 +5,8 @@ const envResult = dotenv.config({ path: envPath });
 if (envResult.error) {
   console.warn(`⚠️  Could not load .env from ${envPath}:`, envResult.error.message);
 } else {
-  console.log(`✓ .env loaded from ${envPath}`);
-  console.log(`  ANTHROPIC_API_KEY present: ${!!process.env.ANTHROPIC_API_KEY}`);
+  const key = process.env.ANTHROPIC_API_KEY ?? '';
+  console.log(`✓ .env loaded — key: ${key ? key.slice(0, 14) + '...' + key.slice(-4) + ` (${key.length} chars)` : 'NOT FOUND'}`);
 }
 
 import express from 'express';
@@ -18,7 +18,12 @@ import Anthropic from '@anthropic-ai/sdk';
 import { rooms, generateRoomCode, serializeRoom } from './rooms';
 import { Room, Member, MogCheck, RoomSettings, AuraEvent, MogScorecard } from './types';
 
-const anthropic = new Anthropic();
+// Lazy — reads the env var at call time so dotenv timing is never an issue
+function getAnthropic() {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not set');
+  return new Anthropic({ apiKey });
+}
 
 const app = express();
 app.use(cors());
@@ -188,7 +193,7 @@ function removeMember(room: Room, member: Member) {
 async function analyzeMogPhoto(photoBase64: string): Promise<MogScorecard | null> {
   try {
     const [, base64Data] = photoBase64.split(',');
-    const response = await anthropic.messages.create({
+    const response = await getAnthropic().messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 512,
       messages: [{

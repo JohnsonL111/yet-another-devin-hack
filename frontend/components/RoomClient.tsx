@@ -1,0 +1,331 @@
+'use client';
+
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import { getSocket } from '@/lib/socket';
+import { RoomState, RecapData, Toast } from '@/lib/types';
+import { formatMs } from '@/lib/utils';
+import ParticipantCard from './ParticipantCard';
+import MogCheckModal from './MogCheckModal';
+import RecapScreen from './RecapScreen';
+import ToastContainer from './ToastContainer';
+import confetti from 'canvas-confetti';
+
+interface PendingCheck {
+  checkId: string;
+  fromUsername: string;
+  expiresAt: number;
+}
+
+interface Props { code: string; }
+
+export default function RoomClient({ code }: Props) {
+  const router = useRouter();
+  const [roomState, setRoomState] = useState<RoomState | null>(null);
+  const [myId, setMyId] = useState('');
+  const [pendingCheck, setPendingCheck] = useState<PendingCheck | null>(null);
+  const [recap, setRecap] = useState<RecapData | null>(null);
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [displayTime, setDisplayTime] = useState(0);
+  const [copied, setCopied] = useState(false);
+  const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+
+  function addToast(message: string, type: Toast['type'] = 'info') {
+    const id = Math.random().toString(36).slice(2);
+    setToasts(prev => [...prev.slice(-4), { id, message, type }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
+  }
+
+  function playBeep(freq = 440, duration = 0.15) {
+    try {
+      if (!audioCtxRef.current) audioCtxRef.current = new AudioContext();
+      const ctx = audioCtxRef.current;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+      osc.start();
+      osc.stop(ctx.currentTime + duration);
+    } catch {}
+  }
+
+  function playAlarm() {
+    playBeep(880, 0.1);
+    setTimeout(() => playBeep(660, 0.1), 150);
+    setTimeout(() => playBeep(880, 0.2), 300);
+  }
+
+  const startTimerInterval = useCallback((state: RoomState) => {
+    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    if (state.timer.endsAt) {
+      timerIntervalRef.current = setInterval(() => {
+        setDisplayTime(Math.max(0, state.timer.endsAt! - Date.now()));
+      }, 100);
+    } else {
+      setDisplayTime(state.timer.remainingMs);
+    }
+  }, []);
+
+  useEffect(() => {
+    const memberId = sessionStorage.getItem('studymog_memberId');
+    if (!memberId) { router.push('/'); return; }
+    setMyId(memberId);
+
+    const socket = getSocket();
+    if (!socket.connected) socket.connect();
+
+    socket.on('room-state', (state: RoomState) => {
+      setRoomState(state);
+      startTimerInterval(state);
+    });
+
+    socket.on('receive-mog-check', (data: { checkId: string; fromUsername: string; expiresAt: number }) => {
+      playAlarm();
+      setPendingCheck(data);
+    });
+
+    socket.on('mog-check-success', (data: { toUsername: string; toMemberId: string }) => {
+      confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 }, colors: ['#10b981', '#34d399', '#a7f3d0'] });
+      addToast(`📸 ${data.toUsername} survived the Mog Check! Mog Certified!`, 'success');
+    });
+
+    socket.on('mog-check-failure', (data: { toUsername: string; reason: string }) => {
+      const reasons: Record<string, string> = {
+        timeout: 'Caught doomscrolling 🔴',
+        cancel: 'Bro folded instantly 💀',
+        disconnect: 'Ran away from the check 🏃',
+        'session-ended': 'Session ended mid-check',
+        disconnect_target: 'Ghost mode activated',
+      };
+      addToast(`🔴 ${data.toUsername} ${reasons[data.reason] ?? 'failed the Mog Check'}. Negative aura detected.`, 'error');
+    });
+
+    socket.on('mog-check-rejected', (data: { reason: string; remainingMs?: number }) => {
+      const msgs: Record<string, string> = {
+        'already-pending': 'Target already has a pending check!',
+        'cooldown-active': `Cooldown active! Wait ${data.remainingMs ? Math.ceil(data.remainingMs / 1000) + 's' : 'a bit'}.`,
+        'no-checks-remaining': 'No Mog Checks remaining this session!',
+        'not-in-focus': 'Can only Mog Check during focus sessions!',
+        'cant-mog-yourself': "Can't Mog yourself — we all know you're slacking.",
+      };
+      addToast(`⚠️ ${msgs[data.reason] ?? data.reason}`, 'warning');
+    });
+
+    socket.on('host-migrated', (data: { newHostUsername: string }) => {
+      addToast(`👑 ${data.newHostUsername} is now the host.`, 'info');
+    });
+
+    socket.on('session-ended', (recapData: RecapData) => {
+      setRecap(recapData);
+      setPendingCheck(null);
+    });
+
+    socket.on('disconnect', () => {
+      addToast('🔌 Disconnected from server. Trying to reconnect...', 'error');
+    });
+
+    return () => {
+      socket.off('room-state');
+      socket.off('receive-mog-check');
+      socket.off('mog-check-success');
+      socket.off('mog-check-failure');
+      socket.off('mog-check-rejected');
+      socket.off('host-migrated');
+      socket.off('session-ended');
+      socket.off('disconnect');
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    };
+  }, [router, startTimerInterval]);
+
+  function handleMogCheck(toId: string) {
+    getSocket().emit('send-mog-check', { toMemberId: toId });
+    addToast('🚨 Mog Check sent! Hope they\'re actually studying...', 'info');
+  }
+
+  function handleSubmitPhoto(checkId: string, photoBase64: string) {
+    getSocket().emit('submit-mog-photo', { checkId, photoBase64 });
+    setPendingCheck(null);
+  }
+
+  function handleFailCheck(checkId: string) {
+    getSocket().emit('cancel-mog-check', { checkId });
+    setPendingCheck(null);
+  }
+
+  function handleStartFocus() {
+    setRecap(null);
+    getSocket().emit('start-focus');
+  }
+
+  function handleStartBreak() {
+    setRecap(null);
+    getSocket().emit('start-break');
+  }
+
+  function handlePause() { getSocket().emit('pause-timer'); }
+  function handleResume() { getSocket().emit('resume-timer'); }
+  function handleReset() { getSocket().emit('reset-timer'); }
+
+  function copyCode() {
+    navigator.clipboard.writeText(code).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  if (!roomState) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-gray-500 text-lg">⏳ Connecting to room {code}...</div>
+      </div>
+    );
+  }
+
+  const me = roomState.members.find(m => m.id === myId);
+  const isHost = me?.isHost ?? false;
+  const isPaused = !roomState.timer.endsAt && roomState.mode !== 'waiting' && roomState.mode !== 'finished';
+
+  const mySentAt = me?.lastCheckSentAt ?? null;
+  const cooldownMs = roomState.settings.cooldownMs;
+  const myCooldownRemaining = mySentAt ? Math.max(0, cooldownMs - (Date.now() - mySentAt)) : 0;
+
+  const iHaveActiveSentCheck = roomState.activeChecks.some(c => c.fromMemberId === myId && c.status === 'pending');
+
+  const timerColor = roomState.mode === 'focus' ? 'timer-glow' : roomState.mode === 'break' ? 'timer-glow-green' : 'text-gray-500';
+  const modeLabel = roomState.mode === 'focus' ? '🎯 FOCUS' : roomState.mode === 'break' ? '☕ BREAK' : roomState.mode === 'finished' ? '✅ DONE' : '🏠 WAITING';
+  const modeBg = roomState.mode === 'focus' ? 'glow-purple' : roomState.mode === 'break' ? 'glow-green' : '';
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      <ToastContainer toasts={toasts} />
+
+      {pendingCheck && (
+        <MogCheckModal
+          checkId={pendingCheck.checkId}
+          fromUsername={pendingCheck.fromUsername}
+          expiresAt={pendingCheck.expiresAt}
+          onSubmit={handleSubmitPhoto}
+          onFail={handleFailCheck}
+        />
+      )}
+
+      {recap && (
+        <RecapScreen
+          recap={recap}
+          myId={myId}
+          isHost={isHost}
+          onStartBreak={handleStartBreak}
+          onNewSession={handleStartFocus}
+        />
+      )}
+
+      {/* Header */}
+      <div className="glass border-b border-white/8 px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="text-2xl font-black">😤</span>
+          <span className="font-bold text-lg">Study Mog</span>
+        </div>
+        <button
+          onClick={copyCode}
+          className="glass px-4 py-2 rounded-xl font-mono font-bold tracking-widest text-purple-300 hover:bg-white/10 transition-all text-sm border border-purple-500/20 flex items-center gap-2"
+        >
+          {copied ? '✅ Copied!' : `🔑 ${code}`}
+        </button>
+        <div className="flex items-center gap-2 text-sm text-gray-500">
+          <span>👥 {roomState.members.length}</span>
+          <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+            roomState.mode === 'focus' ? 'bg-purple-500/20 text-purple-300' :
+            roomState.mode === 'break' ? 'bg-green-500/20 text-green-300' :
+            'bg-gray-500/20 text-gray-400'
+          }`}>{modeLabel}</span>
+        </div>
+      </div>
+
+      <div className="flex-1 flex flex-col items-center px-4 py-8 max-w-6xl mx-auto w-full">
+        {/* Timer */}
+        <div className={`glass rounded-3xl p-8 mb-8 text-center w-full max-w-sm ${modeBg} transition-all duration-500`}>
+          <div className={`text-7xl font-black font-mono ${timerColor} ${roomState.mode === 'focus' ? 'pulse-scale' : ''}`}>
+            {formatMs(displayTime)}
+          </div>
+          <div className="text-gray-500 text-sm mt-2">{modeLabel}</div>
+          {isPaused && <div className="text-yellow-400 text-xs mt-1 font-semibold">⏸ Paused</div>}
+
+          {isHost && (
+            <div className="flex flex-wrap gap-2 justify-center mt-4">
+              {roomState.mode === 'waiting' && (
+                <button className="btn btn-primary" onClick={handleStartFocus}>▶ Start Focus</button>
+              )}
+              {roomState.mode === 'focus' && (
+                <>
+                  {isPaused
+                    ? <button className="btn btn-success" onClick={handleResume}>▶ Resume</button>
+                    : <button className="btn btn-ghost" onClick={handlePause}>⏸ Pause</button>
+                  }
+                  <button className="btn btn-ghost" onClick={handleReset}>↩ Reset</button>
+                </>
+              )}
+              {roomState.mode === 'break' && (
+                <>
+                  {isPaused
+                    ? <button className="btn btn-success" onClick={handleResume}>▶ Resume</button>
+                    : <button className="btn btn-ghost" onClick={handlePause}>⏸ Pause</button>
+                  }
+                  <button className="btn btn-primary" onClick={handleStartFocus}>⏭ Skip Break</button>
+                </>
+              )}
+              {roomState.mode === 'finished' && (
+                <>
+                  <button className="btn btn-success" onClick={handleStartBreak}>☕ Start Break</button>
+                  <button className="btn btn-primary" onClick={handleStartFocus}>🔁 New Session</button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Participants */}
+        <div className="w-full">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3">
+            Study Squad ({roomState.members.length})
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {roomState.members.map(member => (
+              <ParticipantCard
+                key={member.id}
+                member={member}
+                isSelf={member.id === myId}
+                roomMode={roomState.mode}
+                myChecksRemaining={me?.checksRemaining ?? 0}
+                myCooldownRemaining={myCooldownRemaining}
+                alreadyPending={iHaveActiveSentCheck}
+                onMogCheck={handleMogCheck}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Leaderboard strip */}
+        {roomState.members.length > 1 && (
+          <div className="w-full mt-6 glass rounded-2xl p-4">
+            <div className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3">✨ Aura Leaderboard</div>
+            <div className="flex flex-wrap gap-3">
+              {[...roomState.members]
+                .sort((a, b) => b.aura - a.aura)
+                .map((m, i) => (
+                  <div key={m.id} className={`flex items-center gap-2 glass rounded-xl px-3 py-2 text-sm ${m.id === myId ? 'border border-purple-500/30' : ''}`}>
+                    <span className="text-gray-500">{i === 0 ? '👑' : `#${i + 1}`}</span>
+                    <span className="font-semibold truncate max-w-[80px]">{m.username}</span>
+                    <span className={`font-black ${m.aura >= 0 ? 'text-green-400' : 'text-red-400'}`}>{m.aura >= 0 ? '+' : ''}{m.aura}</span>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

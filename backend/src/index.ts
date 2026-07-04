@@ -1,3 +1,14 @@
+import dotenv from 'dotenv';
+import path from 'path';
+const envPath = path.resolve(__dirname, '../../.env');
+const envResult = dotenv.config({ path: envPath });
+if (envResult.error) {
+  console.warn(`⚠️  Could not load .env from ${envPath}:`, envResult.error.message);
+} else {
+  console.log(`✓ .env loaded from ${envPath}`);
+  console.log(`  ANTHROPIC_API_KEY present: ${!!process.env.ANTHROPIC_API_KEY}`);
+}
+
 import express from 'express';
 import { createServer } from 'http';
 import { Server, Socket } from 'socket.io';
@@ -178,7 +189,7 @@ async function analyzeMogPhoto(photoBase64: string): Promise<MogScorecard | null
   try {
     const [, base64Data] = photoBase64.split(',');
     const response = await anthropic.messages.create({
-      model: 'claude-haiku-4-5',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 512,
       messages: [{
         role: 'user',
@@ -229,8 +240,12 @@ JSON format (no other text):
       summary: String(parsed.summary ?? ''),
       mogBonus: Math.round(overall * 2.5),
     };
-  } catch (err) {
-    console.error('Mog analysis failed:', err);
+  } catch (err: unknown) {
+    if (err instanceof Error) {
+      console.error(`❌ Mog analysis failed: ${err.message}`);
+    } else {
+      console.error('❌ Mog analysis failed:', err);
+    }
     return null;
   }
 }
@@ -626,6 +641,13 @@ io.on('connection', (socket: Socket) => {
     if (check.toMemberId !== member.id) return;
 
     failCheck(room, check, 'cancel');
+  });
+
+  // Client emits this on mount to catch up if the initial room-state broadcast was missed
+  socket.on('request-state', () => {
+    const res = findMemberBySocket(socket.id);
+    if (!res) return;
+    socket.emit('room-state', serializeRoom(res.room));
   });
 
   socket.on('disconnect', () => {

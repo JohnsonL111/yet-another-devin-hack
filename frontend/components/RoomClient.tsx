@@ -147,6 +147,9 @@ export default function RoomClient({ code }: Props) {
       addToast('🔌 Disconnected. Trying to reconnect...', 'error');
     });
 
+    // Re-request state in case the initial broadcast fired before this component mounted
+    socket.emit('request-state');
+
     return () => {
       socket.off('room-state');
       socket.off('receive-mog-check');
@@ -422,7 +425,7 @@ export default function RoomClient({ code }: Props) {
           </div>
 
           {/* Leaderboard */}
-          {roomState.members.length > 1 && (
+          {roomState.members.length >= 1 && (
             <div className="w-full mt-6 glass rounded-2xl p-4">
               <div className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3">✨ Aura Leaderboard</div>
               <div className="flex flex-wrap gap-3">

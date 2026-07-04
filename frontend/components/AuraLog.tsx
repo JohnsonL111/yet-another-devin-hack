@@ -7,6 +7,7 @@ const LABELS: Record<AuraEvent['reason'], { icon: string; label: string }> = {
   'mog-check-passed':       { icon: '✅', label: 'Survived a Mog Check' },
   'mog-check-failed':       { icon: '❌', label: 'Failed a Mog Check' },
   'mog-check-sent-success': { icon: '📤', label: 'Check you sent passed' },
+  'mog-quality-bonus':      { icon: '✨', label: 'Mog quality bonus' },
 };
 
 interface Props {

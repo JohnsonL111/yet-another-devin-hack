@@ -5,8 +5,23 @@ export type TimerControlPermission = 'host-only' | 'all';
 
 export interface AuraEvent {
   delta: number;
-  reason: 'session-complete' | 'mog-check-passed' | 'mog-check-failed' | 'mog-check-sent-success';
+  reason: 'session-complete' | 'mog-check-passed' | 'mog-check-failed' | 'mog-check-sent-success' | 'mog-quality-bonus';
   timestamp: number;
+}
+
+export interface MogScorecard {
+  jawline: number;
+  hair: number;
+  symmetry: number;
+  expression: number;
+  posture: number;
+  lighting: number;
+  aura: number;
+  confidence: number;
+  focus: number;
+  overall: number;
+  summary: string;
+  mogBonus: number;
 }
 
 export interface RoomSettings {
@@ -60,6 +75,7 @@ export interface RoomPhoto {
   fromUsername: string;
   photoBase64: string;
   timestamp: number;
+  scorecard?: MogScorecard;
 }
 
 export interface Room {

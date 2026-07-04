@@ -3,8 +3,11 @@ import { createServer } from 'http';
 import { Server, Socket } from 'socket.io';
 import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
+import Anthropic from '@anthropic-ai/sdk';
 import { rooms, generateRoomCode, serializeRoom } from './rooms';
-import { Room, Member, MogCheck, RoomSettings, AuraEvent } from './types';
+import { Room, Member, MogCheck, RoomSettings, AuraEvent, MogScorecard } from './types';
+
+const anthropic = new Anthropic();
 
 const app = express();
 app.use(cors());
@@ -167,6 +170,69 @@ function removeMember(room: Room, member: Member) {
 
   if (wasHost) promoteNewHost(room);
   broadcast(room.code);
+}
+
+// ── mog scorecard ─────────────────────────────────────────────────────────────
+
+async function analyzeMogPhoto(photoBase64: string): Promise<MogScorecard | null> {
+  try {
+    const [, base64Data] = photoBase64.split(',');
+    const response = await anthropic.messages.create({
+      model: 'claude-haiku-4-5',
+      max_tokens: 512,
+      messages: [{
+        role: 'user',
+        content: [
+          {
+            type: 'image',
+            source: { type: 'base64', media_type: 'image/jpeg', data: base64Data },
+          },
+          {
+            type: 'text',
+            text: `You are a Mog Score judge. Rate this person's photo on 10 criteria. Respond ONLY with valid JSON, no markdown or extra text.
+
+Criteria (1=poor, 10=elite):
+- jawline: strong jaw definition
+- hair: clean, styled, well-maintained
+- symmetry: facial symmetry
+- expression: confident, focused expression
+- posture: upright, confident posture
+- lighting: flattering lighting quality
+- aura: overall energy/vibe they project
+- confidence: how confident they appear
+- focus: do they look like they're actually studying
+- overall: holistic mog score (1-10)
+
+Also write a single sentence (summary) explaining the overall score.
+
+JSON format (no other text):
+{"jawline":X,"hair":X,"symmetry":X,"expression":X,"posture":X,"lighting":X,"aura":X,"confidence":X,"focus":X,"overall":X,"summary":"..."}`,
+          },
+        ],
+      }],
+    });
+
+    const text = response.content[0].type === 'text' ? response.content[0].text.trim() : '';
+    const parsed = JSON.parse(text);
+    const overall = Math.min(10, Math.max(1, Number(parsed.overall)));
+    return {
+      jawline:    Math.min(10, Math.max(1, Number(parsed.jawline))),
+      hair:       Math.min(10, Math.max(1, Number(parsed.hair))),
+      symmetry:   Math.min(10, Math.max(1, Number(parsed.symmetry))),
+      expression: Math.min(10, Math.max(1, Number(parsed.expression))),
+      posture:    Math.min(10, Math.max(1, Number(parsed.posture))),
+      lighting:   Math.min(10, Math.max(1, Number(parsed.lighting))),
+      aura:       Math.min(10, Math.max(1, Number(parsed.aura))),
+      confidence: Math.min(10, Math.max(1, Number(parsed.confidence))),
+      focus:      Math.min(10, Math.max(1, Number(parsed.focus))),
+      overall,
+      summary: String(parsed.summary ?? ''),
+      mogBonus: Math.round(overall * 2.5),
+    };
+  } catch (err) {
+    console.error('Mog analysis failed:', err);
+    return null;
+  }
 }
 
 // ── socket handlers ───────────────────────────────────────────────────────────
@@ -511,6 +577,10 @@ io.on('connection', (socket: Socket) => {
       photoBase64: data.photoBase64,
       timestamp: Date.now(),
     });
+    const photoIndex = room.photos.length - 1;
+    const roomCode = room.code;
+    const memberId = member.id;
+    const memberUsername = member.username;
 
     room.activeChecks.delete(check.id);
 
@@ -521,6 +591,29 @@ io.on('connection', (socket: Socket) => {
       photoBase64: data.photoBase64,
     });
     broadcast(room.code);
+
+    // Async mog analysis — does not block the response
+    analyzeMogPhoto(data.photoBase64).then(scorecard => {
+      if (!scorecard) return;
+      const r = rooms.get(roomCode);
+      if (!r) return;
+      const photo = r.photos[photoIndex];
+      if (!photo || photo.memberId !== memberId) return;
+
+      photo.scorecard = scorecard;
+
+      if (scorecard.mogBonus > 0) {
+        const m = r.members.get(memberId);
+        if (m) addAura(m, scorecard.mogBonus, 'mog-quality-bonus');
+      }
+
+      io.to(roomCode).emit('mog-scorecard', {
+        memberId,
+        username: memberUsername,
+        scorecard,
+      });
+      broadcast(roomCode);
+    });
   });
 
   socket.on('cancel-mog-check', (data: { checkId: string }) => {

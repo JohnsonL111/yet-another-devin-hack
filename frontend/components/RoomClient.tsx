@@ -100,6 +100,11 @@ export default function RoomClient({ code }: Props) {
       addToast(`📸 ${data.toUsername} survived the Mog Check! Mog Certified!`, 'success');
     });
 
+    socket.on('mog-scorecard', (data: { username: string; scorecard: { overall: number; summary: string; mogBonus: number } }) => {
+      const { username, scorecard } = data;
+      addToast(`✨ ${username} Mog Score: ${scorecard.overall}/10 — ${scorecard.summary}${scorecard.mogBonus > 0 ? ` (+${scorecard.mogBonus} bonus aura!)` : ''}`, 'info');
+    });
+
     socket.on('mog-check-failure', (data: { toUsername: string; reason: string }) => {
       const reasons: Record<string, string> = {
         timeout: 'Caught doomscrolling 🔴',
@@ -146,6 +151,7 @@ export default function RoomClient({ code }: Props) {
       socket.off('room-state');
       socket.off('receive-mog-check');
       socket.off('mog-check-success');
+      socket.off('mog-scorecard');
       socket.off('mog-check-failure');
       socket.off('mog-check-rejected');
       socket.off('host-migrated');

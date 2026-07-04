@@ -21,7 +21,7 @@ export default function RecapScreen({ recap, myId, onStartBreak, onNewSession, o
   const [showPhotos, setShowPhotos] = useState(false);
 
   useEffect(() => {
-    confetti({ particleCount: 150, spread: 80, origin: { y: 0.5 }, colors: ['#7c3aed', '#4f46e5', '#a78bfa', '#60a5fa', '#fbbf24'] });
+    confetti({ particleCount: 180, spread: 90, origin: { y: 0.5 }, colors: ['#fbbf24', '#f97316', '#a78bfa', '#10b981', '#fff'] });
   }, []);
 
   const sorted = [...recap.members].sort((a, b) => b.sessionAura - a.sessionAura);
@@ -31,68 +31,74 @@ export default function RecapScreen({ recap, myId, onStartBreak, onNewSession, o
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/85 backdrop-blur-sm overflow-y-auto py-8">
       {showPhotos && <PhotoGallery photos={recap.photos} onClose={() => setShowPhotos(false)} />}
 
-      <div className="glass rounded-3xl p-8 w-full max-w-2xl mx-4 fade-in">
-        <div className="text-center mb-6">
-          <div className="text-5xl mb-2">🎉</div>
-          <h2 className="text-3xl font-black mb-1">Session Complete!</h2>
-          <p className="text-gray-400">{focusMin} minute focus session — everyone gets +50 Aura</p>
+      <div className="glass rounded-3xl p-8 w-full max-w-2xl mx-4 pop-in border border-white/10">
+        {/* Header */}
+        <div className="text-center mb-7">
+          <div className="text-5xl mb-3">🎉</div>
+          <h2 className="text-3xl font-bold tracking-tight mb-1">session over.</h2>
+          <p className="text-gray-500 text-sm">
+            {focusMin} minutes · everyone gets <span className="text-yellow-400 font-bold">+50 aura</span> for showing up
+          </p>
         </div>
 
+        {/* MVP */}
         {recap.mvp && (
-          <div className="glass rounded-2xl p-5 mb-6 text-center border border-yellow-500/30 glow-yellow">
-            <div className="text-3xl mb-1">👑</div>
-            <div className="text-xl font-black text-yellow-300">Session MVP</div>
-            <div className="text-2xl font-bold mt-1">{recap.mvp.username}</div>
-            <div className="text-yellow-400/70 text-sm">+{recap.mvp.sessionAura} Aura this session</div>
+          <div className="glass rounded-2xl p-5 mb-5 text-center border border-yellow-500/25 glow-yellow">
+            <div className="text-2xl mb-1">👑</div>
+            <div className="text-xs font-bold uppercase tracking-widest text-yellow-500/70 mb-1">session mvp</div>
+            <div className="text-2xl font-bold">{recap.mvp.username}</div>
+            <div className="text-yellow-400/60 text-sm mt-0.5">+{recap.mvp.sessionAura} aura this session</div>
           </div>
         )}
 
-        {/* Photos button */}
+        {/* Photos */}
         {recap.photos.length > 0 && (
           <button
             onClick={() => setShowPhotos(true)}
-            className="w-full mb-4 glass rounded-xl px-4 py-3 border border-green-500/20 hover:border-green-500/40 transition-all flex items-center justify-center gap-2 text-sm text-green-300"
+            className="w-full mb-4 glass rounded-xl px-4 py-3 border border-green-500/20 hover:border-green-500/40 transition-all flex items-center justify-center gap-2 text-sm text-green-300 font-medium"
           >
-            📸 View {recap.photos.length} Mog Check Photo{recap.photos.length !== 1 ? 's' : ''}
+            📸 see {recap.photos.length} mog photo{recap.photos.length !== 1 ? 's' : ''}
           </button>
         )}
 
+        {/* Leaderboard */}
         <div className="space-y-2 mb-6">
           {sorted.map((m, i) => (
-            <div key={m.id} className={`glass rounded-xl border transition-all ${m.id === myId ? 'border-purple-500/40' : 'border-white/5'}`}>
-              {/* Row */}
+            <div
+              key={m.id}
+              className={`glass rounded-xl border transition-all ${m.id === myId ? 'border-yellow-500/30' : 'border-white/5'}`}
+            >
               <div
                 className="flex items-center gap-4 px-4 py-3 cursor-pointer"
                 onClick={() => setExpandedId(expandedId === m.id ? null : m.id)}
               >
-                <div className="text-xl font-black w-6 text-gray-500">
-                  {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`}
+                <div className="text-lg font-black w-6 text-center">
+                  {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : <span className="text-gray-600 text-sm">{i + 1}</span>}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-bold flex items-center gap-1 text-sm flex-wrap">
+                  <div className="font-bold text-sm flex items-center gap-1.5 flex-wrap">
                     {m.username}
-                    {m.id === myId && <span className="text-xs bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded-full">you</span>}
+                    {m.id === myId && <span className="text-xs bg-white/8 text-gray-400 px-1.5 py-0.5 rounded-md">you</span>}
                     {recap.mvp?.id === m.id && <span className="text-xs">👑</span>}
                   </div>
-                  <div className="text-xs text-gray-500 mt-0.5">
-                    ✅ {m.sessionPassedChecks} · ❌ {m.sessionFailedChecks} · 📤 {m.sessionSentSuccessfully}
+                  <div className="text-xs text-gray-600 mt-0.5">
+                    ✅ {m.sessionPassedChecks} · 💀 {m.sessionFailedChecks} · 📤 {m.sessionSentSuccessfully}
                   </div>
                 </div>
                 <div className="text-right flex-shrink-0 flex items-center gap-3">
                   <div>
-                    <div className={`font-black text-lg ${auraColor(m.sessionAura)}`}>
+                    <div className={`font-black text-lg leading-none ${auraColor(m.sessionAura)}`}>
                       {m.sessionAura >= 0 ? '+' : ''}{m.sessionAura}
                     </div>
-                    <div className="text-xs text-gray-600">Total: {m.totalAura}</div>
+                    <div className="text-[10px] text-gray-600 mt-0.5">total: {m.totalAura}</div>
                   </div>
-                  <span className="text-gray-600 text-xs">{expandedId === m.id ? '▲' : '▼'}</span>
+                  <span className="text-gray-700 text-xs">{expandedId === m.id ? '▲' : '▼'}</span>
                 </div>
               </div>
 
-              {/* Aura log */}
               {expandedId === m.id && (
                 <div className="border-t border-white/5 px-4 py-3 fade-in">
-                  <div className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-2">Aura breakdown</div>
+                  <div className="text-[10px] text-gray-600 font-bold uppercase tracking-widest mb-2">aura breakdown</div>
                   <AuraLog log={m.auraLog} />
                 </div>
               )}
@@ -100,20 +106,21 @@ export default function RecapScreen({ recap, myId, onStartBreak, onNewSession, o
           ))}
         </div>
 
+        {/* Actions */}
         {isHost ? (
           <div className="flex flex-wrap gap-3 justify-center">
-            <button className="btn btn-ghost flex-1 min-w-[120px] justify-center" onClick={onBackToLobby}>
-              🏠 Back to Lobby
+            <button className="btn btn-ghost flex-1 min-w-[110px] justify-center text-sm" onClick={onBackToLobby}>
+              🏠 Lobby
             </button>
-            <button className="btn btn-success flex-1 min-w-[120px] justify-center" onClick={onStartBreak}>
-              ☕ Start Break
+            <button className="btn btn-success flex-1 min-w-[110px] justify-center text-sm" onClick={onStartBreak}>
+              ☕ Break
             </button>
-            <button className="btn btn-primary flex-1 min-w-[120px] justify-center" onClick={onNewSession}>
-              🔁 New Session
+            <button className="btn btn-primary flex-1 min-w-[110px] justify-center text-sm text-black" onClick={onNewSession}>
+              🔁 Run it back
             </button>
           </div>
         ) : (
-          <p className="text-center text-gray-500 text-sm">Waiting for host to continue...</p>
+          <p className="text-center text-gray-600 text-sm">waiting for the host...</p>
         )}
       </div>
     </div>

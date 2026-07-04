@@ -96,8 +96,8 @@ export default function RoomClient({ code }: Props) {
     });
 
     socket.on('mog-check-success', (data: { toUsername: string }) => {
-      confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 }, colors: ['#10b981', '#34d399', '#a7f3d0'] });
-      addToast(`📸 ${data.toUsername} survived the Mog Check! Mog Certified!`, 'success');
+      confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 }, colors: ['#fbbf24', '#10b981', '#a7f3d0'] });
+      addToast(`📸 ${data.toUsername} actually was studying. mog certified.`, 'success');
     });
 
     socket.on('mog-scorecard', (data: { username: string; scorecard: { overall: number; summary: string; mogBonus: number } }) => {
@@ -107,12 +107,12 @@ export default function RoomClient({ code }: Props) {
 
     socket.on('mog-check-failure', (data: { toUsername: string; reason: string }) => {
       const reasons: Record<string, string> = {
-        timeout: 'Caught doomscrolling 🔴',
-        cancel: 'Bro folded instantly 💀',
-        disconnect: 'Ran away from the check 🏃',
-        'session-ended': 'Session ended mid-check',
+        timeout:         'took too long. caught.',
+        cancel:          'folded instantly 💀',
+        disconnect:      'ran from the check 🏃',
+        'session-ended': 'session ended mid-check',
       };
-      addToast(`🔴 ${data.toUsername} — ${reasons[data.reason] ?? 'failed the Mog Check'}. Negative aura detected.`, 'error');
+      addToast(`💀 ${data.toUsername} — ${reasons[data.reason] ?? 'failed'}. negative aura incoming.`, 'error');
     });
 
     socket.on('mog-check-rejected', (data: { reason: string; remainingMs?: number }) => {
@@ -185,7 +185,7 @@ export default function RoomClient({ code }: Props) {
 
   function handleMogCheck(toId: string) {
     getSocket().emit('send-mog-check', { toMemberId: toId });
-    addToast("🚨 Mog Check sent! Hope they're actually studying...", 'info');
+    addToast('🚨 mog check sent. they have 60 seconds.', 'warning');
   }
 
   function handleSubmitPhoto(checkId: string, photoBase64: string) {
@@ -235,7 +235,7 @@ export default function RoomClient({ code }: Props) {
   const myCooldownRemaining = mySentAt ? Math.max(0, cooldownMs - (Date.now() - mySentAt)) : 0;
   const iHaveActiveSentCheck = roomState.activeChecks.some(c => c.fromMemberId === myId && c.status === 'pending');
 
-  const timerColor = roomState.mode === 'focus' ? 'timer-glow' : roomState.mode === 'break' ? 'timer-glow-green' : 'text-gray-500';
+  const timerColor = roomState.mode === 'focus' ? 'timer-glow' : roomState.mode === 'break' ? 'timer-glow-green' : 'text-gray-600';
   const modeLabel = roomState.mode === 'focus' ? '🎯 FOCUS' : roomState.mode === 'break' ? '☕ BREAK' : roomState.mode === 'finished' ? '✅ DONE' : '🏠 LOBBY';
   const modeBg = roomState.mode === 'focus' ? 'glow-purple' : roomState.mode === 'break' ? 'glow-green' : '';
 
@@ -295,8 +295,8 @@ export default function RoomClient({ code }: Props) {
       {/* Header */}
       <div className="glass border-b border-white/8 px-4 py-3 flex items-center justify-between gap-3 sticky top-0 z-40">
         <div className="flex items-center gap-2">
-          <span className="text-xl font-black">😤</span>
-          <span className="font-bold hidden sm:block">Study Mog</span>
+          <span className="text-xl">😤</span>
+          <span className="font-bold hidden sm:block tracking-tight">study mog</span>
         </div>
 
         <button
@@ -307,12 +307,12 @@ export default function RoomClient({ code }: Props) {
         </button>
 
         <div className="flex items-center gap-2 text-xs">
-          <span className={`px-2 py-0.5 rounded-full font-bold ${
+          <span className={`px-2 py-0.5 rounded-lg font-bold text-xs tracking-wider ${
             roomState.mode === 'focus' ? 'bg-purple-500/20 text-purple-300' :
             roomState.mode === 'break' ? 'bg-green-500/20 text-green-300' :
-            'bg-gray-500/20 text-gray-400'
+            'bg-white/8 text-gray-400'
           }`}>{modeLabel}</span>
-          <span className="text-gray-500">👥 {roomState.members.length}</span>
+          <span className="text-gray-600 text-xs">👥 {roomState.members.length}</span>
         </div>
 
         <div className="flex items-center gap-1">
@@ -366,7 +366,7 @@ export default function RoomClient({ code }: Props) {
               {formatMs(displayTime)}
             </div>
             <div className="text-gray-500 text-sm mt-2">{modeLabel}</div>
-            {isPaused && <div className="text-yellow-400 text-xs mt-1 font-semibold">⏸ Paused</div>}
+            {isPaused && <div className="text-yellow-400 text-xs mt-1 font-bold tracking-wider">⏸ PAUSED</div>}
 
             {canControl && (
               <div className="flex flex-wrap gap-2 justify-center mt-4">
@@ -404,8 +404,8 @@ export default function RoomClient({ code }: Props) {
 
           {/* Participants */}
           <div className="w-full">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3">
-              Study Squad ({roomState.members.length})
+            <h3 className="text-[10px] font-bold uppercase tracking-widest text-gray-600 mb-3">
+              the squad · {roomState.members.length}
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {roomState.members.map(member => (
@@ -427,15 +427,15 @@ export default function RoomClient({ code }: Props) {
           {/* Leaderboard */}
           {roomState.members.length >= 1 && (
             <div className="w-full mt-6 glass rounded-2xl p-4">
-              <div className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3">✨ Aura Leaderboard</div>
-              <div className="flex flex-wrap gap-3">
+              <div className="text-[10px] font-bold uppercase tracking-widest text-gray-600 mb-3">aura standings</div>
+              <div className="flex flex-wrap gap-2">
                 {[...roomState.members]
                   .sort((a, b) => b.aura - a.aura)
                   .map((m, i) => (
-                    <div key={m.id} className={`flex items-center gap-2 glass rounded-xl px-3 py-2 text-sm ${m.id === myId ? 'border border-purple-500/30' : ''}`}>
-                      <span className="text-gray-500">{i === 0 ? '👑' : `#${i + 1}`}</span>
-                      <span className="font-semibold truncate max-w-[80px]">{m.username}</span>
-                      <span className={`font-black ${m.aura >= 0 ? 'text-green-400' : 'text-red-400'}`}>{m.aura >= 0 ? '+' : ''}{m.aura}</span>
+                    <div key={m.id} className={`flex items-center gap-2 glass rounded-xl px-3 py-2 text-sm ${m.id === myId ? 'border border-yellow-500/25' : 'border border-white/5'}`}>
+                      <span className="text-gray-600 text-xs">{i === 0 ? '👑' : `#${i + 1}`}</span>
+                      <span className="font-semibold truncate max-w-[80px] text-sm">{m.username}</span>
+                      <span className={`font-black text-sm ${m.aura >= 0 ? 'text-yellow-400' : 'text-red-400'}`}>{m.aura >= 0 ? '+' : ''}{m.aura}</span>
                     </div>
                   ))}
               </div>

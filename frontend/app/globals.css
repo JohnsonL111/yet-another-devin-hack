@@ -1,41 +1,49 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #0a0a0f;
-  --card: rgba(255, 255, 255, 0.04);
-  --border: rgba(255, 255, 255, 0.08);
+  --bg: #09090f;
+  --card: rgba(255,255,255,0.045);
+  --border: rgba(255,255,255,0.1);
+  --yellow: #fbbf24;
 }
 
 * { box-sizing: border-box; }
 
 body {
-  background: #0a0a0f;
-  color: #f0f0f5;
-  font-family: system-ui, sans-serif;
+  background-color: #09090f;
+  background-image:
+    radial-gradient(ellipse 65% 45% at 10% 0%, rgba(251,191,36,0.08) 0%, transparent 60%),
+    radial-gradient(ellipse 45% 35% at 90% 100%, rgba(124,58,237,0.07) 0%, transparent 60%);
+  color: #f0efe8;
+  font-family: var(--font-space, system-ui, sans-serif);
   min-height: 100vh;
 }
 
 .glass {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255,255,255,0.045);
+  border: 1px solid rgba(255,255,255,0.1);
   backdrop-filter: blur(12px);
 }
 
-.glow-purple { box-shadow: 0 0 24px rgba(124, 58, 237, 0.4); }
-.glow-green  { box-shadow: 0 0 24px rgba(5, 150, 105, 0.4); }
-.glow-red    { box-shadow: 0 0 24px rgba(239, 68, 68, 0.4); }
-.glow-yellow { box-shadow: 0 0 24px rgba(251, 191, 36, 0.4); }
+/* glows */
+.glow-yellow  { box-shadow: 0 0 28px rgba(251,191,36,0.35); }
+.glow-orange  { box-shadow: 0 0 28px rgba(249,115,22,0.35); }
+.glow-purple  { box-shadow: 0 0 28px rgba(124,58,237,0.35); }
+.glow-green   { box-shadow: 0 0 28px rgba(5,150,105,0.35);  }
+.glow-red     { box-shadow: 0 0 28px rgba(239,68,68,0.35);  }
 
+/* timer text glows */
 .timer-glow {
-  text-shadow: 0 0 40px rgba(124, 58, 237, 0.9), 0 0 80px rgba(124, 58, 237, 0.4);
+  text-shadow: 0 0 40px rgba(124,58,237,0.9), 0 0 80px rgba(124,58,237,0.4);
 }
 .timer-glow-green {
-  text-shadow: 0 0 40px rgba(5, 150, 105, 0.9), 0 0 80px rgba(5, 150, 105, 0.4);
+  text-shadow: 0 0 40px rgba(16,185,129,0.9), 0 0 80px rgba(16,185,129,0.4);
 }
 
+/* animations */
 @keyframes pulse-scale {
   0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.04); }
+  50%       { transform: scale(1.04); }
 }
 .pulse-scale { animation: pulse-scale 2s ease-in-out infinite; }
 
@@ -52,69 +60,108 @@ body {
   from { transform: translateX(110%); opacity: 0; }
   to   { transform: translateX(0);    opacity: 1; }
 }
-.slide-in { animation: slide-in-right 0.3s ease-out; }
+.slide-in { animation: slide-in-right 0.3s cubic-bezier(.22,.68,0,1.2); }
 
 @keyframes fade-in {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.fade-in { animation: fade-in 0.25s ease-out; }
+.fade-in { animation: fade-in 0.2s ease-out; }
 
+@keyframes pop-in {
+  0%   { transform: scale(0.9); opacity: 0; }
+  70%  { transform: scale(1.03); opacity: 1; }
+  100% { transform: scale(1); }
+}
+.pop-in { animation: pop-in 0.25s cubic-bezier(.22,.68,0,1.4); }
+
+/* inputs */
 input, select {
   background: rgba(255,255,255,0.06);
   border: 1px solid rgba(255,255,255,0.12);
-  color: #f0f0f5;
-  border-radius: 8px;
+  color: #f0efe8;
+  border-radius: 10px;
   padding: 10px 14px;
   width: 100%;
   outline: none;
-  transition: border-color 0.2s;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 input:focus, select:focus {
-  border-color: #7c3aed;
-  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.2);
+  border-color: #fbbf24;
+  box-shadow: 0 0 0 2px rgba(251,191,36,0.18);
 }
-input::placeholder { color: rgba(255,255,255,0.3); }
-select option { background: #1a1a2e; }
+input::placeholder { color: rgba(255,255,255,0.28); }
+select option { background: #15141f; }
 
+/* buttons */
 .btn {
   padding: 10px 20px;
   border-radius: 10px;
-  font-weight: 600;
-  font-size: 0.95rem;
+  font-weight: 700;
+  font-size: 0.9rem;
   cursor: pointer;
-  transition: all 0.18s;
+  transition: all 0.15s;
   border: none;
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  letter-spacing: -0.01em;
 }
-.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* yellow primary — high contrast, punchy */
 .btn-primary {
-  background: linear-gradient(135deg, #7c3aed, #4f46e5);
-  color: white;
+  background: #fbbf24;
+  color: #0a0a0f;
 }
-.btn-primary:hover:not(:disabled) { filter: brightness(1.15); transform: translateY(-1px); box-shadow: 0 4px 20px rgba(124,58,237,0.5); }
+.btn-primary:hover:not(:disabled) {
+  background: #fcd34d;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px rgba(251,191,36,0.4);
+}
+.btn-primary:active:not(:disabled) { transform: translateY(0); }
+
 .btn-success {
   background: linear-gradient(135deg, #059669, #10b981);
   color: white;
 }
-.btn-success:hover:not(:disabled) { filter: brightness(1.15); transform: translateY(-1px); }
+.btn-success:hover:not(:disabled) {
+  filter: brightness(1.12);
+  transform: translateY(-1px);
+}
+
 .btn-danger {
   background: linear-gradient(135deg, #dc2626, #ef4444);
   color: white;
 }
-.btn-danger:hover:not(:disabled) { filter: brightness(1.15); transform: translateY(-1px); }
-.btn-ghost {
-  background: rgba(255,255,255,0.07);
-  color: #ccc;
-  border: 1px solid rgba(255,255,255,0.1);
+.btn-danger:hover:not(:disabled) {
+  filter: brightness(1.12);
+  transform: translateY(-1px);
 }
-.btn-ghost:hover:not(:disabled) { background: rgba(255,255,255,0.12); }
+
+.btn-ghost {
+  background: rgba(255,255,255,0.06);
+  color: #ccc;
+  border: 1px solid rgba(255,255,255,0.12);
+}
+.btn-ghost:hover:not(:disabled) {
+  background: rgba(255,255,255,0.1);
+  border-color: rgba(255,255,255,0.2);
+}
+
+/* mog check button — orange, aggressive */
 .btn-mog {
-  background: linear-gradient(135deg, #f59e0b, #ef4444);
+  background: linear-gradient(135deg, #ea580c, #f97316);
   color: white;
   font-size: 0.78rem;
-  padding: 6px 12px;
+  padding: 7px 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
-.btn-mog:hover:not(:disabled) { filter: brightness(1.15); transform: scale(1.04); }
+.btn-mog:hover:not(:disabled) {
+  filter: brightness(1.1);
+  transform: scale(1.03);
+  box-shadow: 0 0 16px rgba(249,115,22,0.4);
+}
+.btn-mog:disabled { background: rgba(255,255,255,0.08); color: #555; }

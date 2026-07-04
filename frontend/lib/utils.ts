@@ -8,23 +8,23 @@ export function formatMs(ms: number): string {
 
 export function statusEmoji(status: string): string {
   switch (status) {
-    case 'locked-in': return '🟢';
-    case 'mog-pending': return '🟡';
-    case 'mog-certified': return '📸';
-    case 'mog-failed': return '🔴';
-    case 'on-break': return '☕';
+    case 'locked-in':    return '🟢';
+    case 'mog-pending':  return '👀';
+    case 'mog-certified':return '📸';
+    case 'mog-failed':   return '💀';
+    case 'on-break':     return '☕';
     default: return '⚪';
   }
 }
 
 export function statusLabel(status: string): string {
   switch (status) {
-    case 'locked-in': return 'Locked In';
-    case 'mog-pending': return 'Mog Check Pending';
-    case 'mog-certified': return 'Mog Certified';
-    case 'mog-failed': return 'Failed Mog Check';
-    case 'on-break': return 'On Break';
-    default: return 'Unknown';
+    case 'locked-in':    return 'locked in';
+    case 'mog-pending':  return 'getting checked rn';
+    case 'mog-certified':return 'mog certified';
+    case 'mog-failed':   return 'caught lacking';
+    case 'on-break':     return 'on break';
+    default: return 'vibing';
   }
 }
 

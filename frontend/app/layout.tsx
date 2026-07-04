@@ -1,9 +1,16 @@
 import type { Metadata } from "next";
+import { Space_Grotesk } from "next/font/google";
 import "./globals.css";
 
+const font = Space_Grotesk({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-space",
+});
+
 export const metadata: Metadata = {
-  title: "Study Mog — Stay Locked In",
-  description: "Multiplayer Pomodoro accountability. Stay locked in. Catch your friends slacking.",
+  title: "Study Mog",
+  description: "Prove you're actually studying.",
 };
 
 export default function RootLayout({
@@ -12,8 +19,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="h-full">
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="en" className={`h-full ${font.variable}`}>
+      <body className={`min-h-full flex flex-col ${font.className}`}>{children}</body>
     </html>
   );
 }

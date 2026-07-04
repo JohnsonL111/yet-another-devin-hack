@@ -136,14 +136,14 @@ export default function MogCheckModal({ checkId, fromUsername, expiresAt, onSubm
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm">
-      <div className={`glass rounded-3xl p-8 w-full max-w-lg mx-4 fade-in ${urgent ? 'glow-red shake' : 'glow-yellow'}`}>
+      <div className={`glass rounded-3xl p-8 w-full max-w-lg mx-4 fade-in ${urgent ? 'glow-red shake' : 'glow-orange'}`}>
         <div className="text-center mb-6">
           <div className="text-5xl mb-2">🚨</div>
-          <h2 className="text-3xl font-black text-red-400 mb-1">MOG CHECK</h2>
+          <h2 className="text-3xl font-black text-orange-400 mb-1 tracking-tight">MOG CHECK</h2>
           <p className="text-gray-300">
-            <span className="text-yellow-300 font-bold">{fromUsername}</span> suspects you&apos;re doomscrolling.
+            <span className="text-yellow-300 font-bold">{fromUsername}</span> thinks you&apos;re slacking.
           </p>
-          <p className="text-gray-500 text-sm">Prove you&apos;re actually studying.</p>
+          <p className="text-gray-600 text-sm">take the photo or take the L.</p>
         </div>
 
         {/* Countdown bar */}
@@ -162,8 +162,8 @@ export default function MogCheckModal({ checkId, fromUsername, expiresAt, onSubm
         {cameraError ? (
           <div className="text-center py-6">
             <div className="text-4xl mb-3">📵</div>
-            <p className="text-red-400 font-semibold">No camera detected — auto-failing...</p>
-            <p className="text-gray-500 text-sm mt-1">Caught lacking. No excuses.</p>
+            <p className="text-red-400 font-semibold">no camera found — auto-failing.</p>
+            <p className="text-gray-600 text-sm mt-1">caught lacking. skill issue.</p>
           </div>
         ) : (
           <>
@@ -216,7 +216,7 @@ export default function MogCheckModal({ checkId, fromUsername, expiresAt, onSubm
           </>
         )}
 
-        <p className="text-center text-xs text-gray-600 mt-3">Cancel = instant fail. No mercy.</p>
+        <p className="text-center text-xs text-gray-700 mt-3">cancel = instant fail. no mercy.</p>
       </div>
     </div>
   );
